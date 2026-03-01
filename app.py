@@ -11,6 +11,7 @@ SENHA = "2026"
 
 ARQUIVO_LEADS = "leads.csv"
 META_VAGAS = 30
+VALOR_CURSO = 1200  # ALTERE AQUI SE NECESSÁRIO
 
 DATA_ONLINE_INICIO = date(2026, 5, 16)
 DATA_PRATICA_INICIO = date(2026, 5, 23)
@@ -60,8 +61,11 @@ dias_pratica = (DATA_PRATICA_INICIO - date.today()).days
 
 ocupacao = confirmados / META_VAGAS if META_VAGAS > 0 else 0
 
-col1, col2, col3 = st.columns(3)
+# Receita
+receita_confirmada = confirmados * VALOR_CURSO
+receita_potencial = META_VAGAS * VALOR_CURSO
 
+col1, col2, col3 = st.columns(3)
 col1.metric("🎯 Meta de Vagas", META_VAGAS)
 col2.metric("✅ Confirmados", confirmados)
 col3.metric("🪑 Restantes", vagas_restantes)
@@ -69,17 +73,18 @@ col3.metric("🪑 Restantes", vagas_restantes)
 st.progress(ocupacao)
 
 col4, col5, col6 = st.columns(3)
-
 col4.metric("💻 Online inicia em", dias_online)
 col5.metric("🏥 Prática inicia em", dias_pratica)
 col6.metric("📈 Taxa de Conversão (%)", f"{taxa_conversao:.1f}")
 
-# Alertas
-if dias_online <= 30 and dias_online > 0:
-    st.warning("⚠️ Faltam menos de 30 dias para as aulas online!")
+st.divider()
 
-if dias_pratica <= 30 and dias_pratica > 0:
-    st.warning("⚠️ Faltam menos de 30 dias para as aulas práticas!")
+# ================= FINANCEIRO =================
+st.subheader("💰 Financeiro")
+
+col7, col8 = st.columns(2)
+col7.metric("💵 Receita Confirmada", f"R$ {receita_confirmada:,.2f}")
+col8.metric("📊 Receita Potencial", f"R$ {receita_potencial:,.2f}")
 
 st.divider()
 
@@ -110,10 +115,19 @@ with st.form("form_lead"):
 
 st.divider()
 
-# ================= LISTA =================
+# ================= LEADS =================
 st.subheader("📋 Leads cadastrados")
 
 if not leads_df.empty:
+    leads_df["Data"] = pd.to_datetime(leads_df["Data"], format="%d/%m/%Y", errors="coerce")
+    leads_df["Dias sem contato"] = (pd.to_datetime(date.today()) - leads_df["Data"]).dt.days
+
+    leads_parados = leads_df[leads_df["Dias sem contato"] >= 2]
+
+    if not leads_parados.empty:
+        st.warning("⚠️ Existem leads parados há 2 dias ou mais!")
+        st.dataframe(leads_parados, use_container_width=True)
+
     st.dataframe(leads_df, use_container_width=True)
 else:
     st.info("Nenhum lead cadastrado ainda.")
