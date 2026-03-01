@@ -42,7 +42,14 @@ def carregar_leads():
     if os.path.exists(ARQUIVO_LEADS):
         return pd.read_csv(ARQUIVO_LEADS)
     else:
-        df = pd.DataFrame(columns=["Nome", "Telefone", "Origem", "Status", "Modalidade", "Data"])
+        df = pd.DataFrame(columns=[
+            "Nome", "Telefone", "Origem",
+            "Modalidade", "Valor Cheio",
+            "Valor Pago", "Saldo",
+            "Forma Pagamento",
+            "Status Financeiro",
+            "Data"
+        ])
         df.to_csv(ARQUIVO_LEADS, index=False)
         return df
 
@@ -54,36 +61,29 @@ st.title("📊 Painel da Turma")
 
 leads_df = carregar_leads()
 
-# Garantir coluna Modalidade se vier de versão antiga
-if "Modalidade" not in leads_df.columns:
-    leads_df["Modalidade"] = ""
+# Garantir colunas caso venha de versão anterior
+for col in ["Valor Cheio", "Valor Pago", "Saldo", "Forma Pagamento", "Status Financeiro"]:
+    if col not in leads_df.columns:
+        leads_df[col] = 0
 
-confirmados_df = leads_df[leads_df["Status"] == "Pago"]
+# Conversões financeiras
+receita_recebida = leads_df["Valor Pago"].sum()
+receita_prevista = leads_df["Valor Cheio"].sum()
+total_pendente = receita_prevista - receita_recebida
 
-qtd_teorico = len(confirmados_df[confirmados_df["Modalidade"] == "Teórico"])
-qtd_pratica = len(confirmados_df[confirmados_df["Modalidade"] == "Prática"])
+confirmados = len(leads_df[leads_df["Status Financeiro"] == "Pago"])
+vagas_restantes = META_VAGAS - confirmados
 
-total_confirmados = len(confirmados_df)
-vagas_restantes = META_VAGAS - total_confirmados
-
-# Receita
-receita_teorico = qtd_teorico * VALOR_TEORICO
-receita_pratica = qtd_pratica * VALOR_PRATICA
-receita_total = receita_teorico + receita_pratica
-receita_potencial_max = META_VAGAS * VALOR_PRATICA
-
-# Datas
 dias_online = (DATA_ONLINE_INICIO - date.today()).days
 dias_pratica = (DATA_PRATICA_INICIO - date.today()).days
 
-ocupacao = total_confirmados / META_VAGAS if META_VAGAS > 0 else 0
-
+# ================= MÉTRICAS =================
 col1, col2, col3 = st.columns(3)
 col1.metric("🎯 Meta de Alunos", META_VAGAS)
-col2.metric("✅ Confirmados", total_confirmados)
+col2.metric("✅ Pagos", confirmados)
 col3.metric("🪑 Restantes", vagas_restantes)
 
-st.progress(ocupacao)
+st.divider()
 
 col4, col5 = st.columns(2)
 col4.metric("💻 Online inicia em", dias_online)
@@ -91,60 +91,62 @@ col5.metric("🏥 Prática inicia em", dias_pratica)
 
 st.divider()
 
-# ================= MODALIDADES =================
-st.subheader("📘 Distribuição de Alunos")
-
-col6, col7 = st.columns(2)
-col6.metric("Teórico (97)", qtd_teorico)
-col7.metric("Prática (397)", qtd_pratica)
-
-st.divider()
-
 # ================= FINANCEIRO =================
 st.subheader("💰 Financeiro")
 
-col8, col9 = st.columns(2)
-col8.metric("💵 Receita Total", f"R$ {receita_total:,.2f}")
-col9.metric("📈 Receita Potencial Máxima", f"R$ {receita_potencial_max:,.2f}")
+col6, col7, col8 = st.columns(3)
+col6.metric("💵 Receita Recebida", f"R$ {receita_recebida:,.2f}")
+col7.metric("📈 Receita Prevista", f"R$ {receita_prevista:,.2f}")
+col8.metric("⏳ Total Pendente", f"R$ {total_pendente:,.2f}")
 
 st.divider()
 
 # ================= CADASTRO =================
-st.subheader("➕ Adicionar Lead")
+st.subheader("➕ Adicionar Aluno")
 
-with st.form("form_lead"):
+with st.form("form_aluno"):
     nome = st.text_input("Nome")
     telefone = st.text_input("Telefone")
     origem = st.selectbox("Origem", ["Story", "Reels", "Indicação", "Outro"])
-    status = st.selectbox("Status", ["Novo", "Informações enviadas", "Aguardando resposta", "Confirmado", "Pago"])
     modalidade = st.selectbox("Modalidade", ["Teórico", "Prática"])
+
+    valor_cheio = VALOR_TEORICO if modalidade == "Teórico" else VALOR_PRATICA
+    valor_pago = st.number_input("Valor Pago (R$)", min_value=0.0, step=10.0)
+    forma_pagamento = st.selectbox("Forma de Pagamento", ["Pix", "Cartão", "Dinheiro"])
+    status_financeiro = st.selectbox("Status Financeiro", ["Pago", "Parcial", "Pendente"])
 
     enviar = st.form_submit_button("Salvar")
 
     if enviar:
+        saldo = valor_cheio - valor_pago
+
         nova_linha = {
             "Nome": nome,
             "Telefone": telefone,
             "Origem": origem,
-            "Status": status,
             "Modalidade": modalidade,
+            "Valor Cheio": valor_cheio,
+            "Valor Pago": valor_pago,
+            "Saldo": saldo,
+            "Forma Pagamento": forma_pagamento,
+            "Status Financeiro": status_financeiro,
             "Data": datetime.now().strftime("%d/%m/%Y")
         }
 
         leads_df = pd.concat([leads_df, pd.DataFrame([nova_linha])], ignore_index=True)
         salvar_leads(leads_df)
-        st.success("Lead salvo com sucesso!")
+        st.success("Aluno salvo com sucesso!")
         st.rerun()
 
 st.divider()
 
-# ================= LISTA =================
-st.subheader("📋 Leads cadastrados")
+# ================= TABELA =================
+st.subheader("📋 Alunos cadastrados")
 
 if not leads_df.empty:
     st.dataframe(leads_df, use_container_width=True)
 else:
-    st.info("Nenhum lead cadastrado ainda.")
+    st.info("Nenhum aluno cadastrado ainda.")
 
 st.divider()
 
