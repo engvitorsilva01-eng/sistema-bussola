@@ -11,7 +11,9 @@ SENHA = "2026"
 
 ARQUIVO_LEADS = "leads.csv"
 META_VAGAS = 30
-DATA_CURSO = date(2026, 5, 20)
+
+DATA_ONLINE_INICIO = date(2026, 5, 16)
+DATA_PRATICA_INICIO = date(2026, 5, 23)
 
 # ================= LOGIN =================
 if "logado" not in st.session_state:
@@ -52,14 +54,32 @@ leads_df = carregar_leads()
 confirmados = len(leads_df[leads_df["Status"] == "Pago"])
 vagas_restantes = META_VAGAS - confirmados
 taxa_conversao = (confirmados / len(leads_df) * 100) if len(leads_df) > 0 else 0
-dias_restantes = (DATA_CURSO - date.today()).days
 
-col1, col2, col3, col4 = st.columns(4)
+dias_online = (DATA_ONLINE_INICIO - date.today()).days
+dias_pratica = (DATA_PRATICA_INICIO - date.today()).days
 
-col1.metric("🎯 Meta", META_VAGAS)
+ocupacao = confirmados / META_VAGAS if META_VAGAS > 0 else 0
+
+col1, col2, col3 = st.columns(3)
+
+col1.metric("🎯 Meta de Vagas", META_VAGAS)
 col2.metric("✅ Confirmados", confirmados)
 col3.metric("🪑 Restantes", vagas_restantes)
-col4.metric("📅 Dias para o curso", dias_restantes)
+
+st.progress(ocupacao)
+
+col4, col5, col6 = st.columns(3)
+
+col4.metric("💻 Online inicia em", dias_online)
+col5.metric("🏥 Prática inicia em", dias_pratica)
+col6.metric("📈 Taxa de Conversão (%)", f"{taxa_conversao:.1f}")
+
+# Alertas
+if dias_online <= 30 and dias_online > 0:
+    st.warning("⚠️ Faltam menos de 30 dias para as aulas online!")
+
+if dias_pratica <= 30 and dias_pratica > 0:
+    st.warning("⚠️ Faltam menos de 30 dias para as aulas práticas!")
 
 st.divider()
 
@@ -82,6 +102,7 @@ with st.form("form_lead"):
             "Status": status,
             "Data": datetime.now().strftime("%d/%m/%Y")
         }
+
         leads_df = pd.concat([leads_df, pd.DataFrame([nova_linha])], ignore_index=True)
         salvar_leads(leads_df)
         st.success("Lead salvo com sucesso!")
@@ -92,7 +113,10 @@ st.divider()
 # ================= LISTA =================
 st.subheader("📋 Leads cadastrados")
 
-st.dataframe(leads_df, use_container_width=True)
+if not leads_df.empty:
+    st.dataframe(leads_df, use_container_width=True)
+else:
+    st.info("Nenhum lead cadastrado ainda.")
 
 st.divider()
 
