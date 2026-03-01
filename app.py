@@ -10,8 +10,10 @@ USUARIO = "bussola"
 SENHA = "2026"
 
 ARQUIVO_LEADS = "leads.csv"
-META_VAGAS = 30
-VALOR_CURSO = 1200  # ALTERE AQUI SE NECESSÁRIO
+META_VAGAS = 25
+
+VALOR_TEORICO = 97
+VALOR_PRATICA = 397
 
 DATA_ONLINE_INICIO = date(2026, 5, 16)
 DATA_PRATICA_INICIO = date(2026, 5, 23)
@@ -40,7 +42,7 @@ def carregar_leads():
     if os.path.exists(ARQUIVO_LEADS):
         return pd.read_csv(ARQUIVO_LEADS)
     else:
-        df = pd.DataFrame(columns=["Nome", "Telefone", "Origem", "Status", "Data"])
+        df = pd.DataFrame(columns=["Nome", "Telefone", "Origem", "Status", "Modalidade", "Data"])
         df.to_csv(ARQUIVO_LEADS, index=False)
         return df
 
@@ -52,39 +54,58 @@ st.title("📊 Painel da Turma")
 
 leads_df = carregar_leads()
 
-confirmados = len(leads_df[leads_df["Status"] == "Pago"])
-vagas_restantes = META_VAGAS - confirmados
-taxa_conversao = (confirmados / len(leads_df) * 100) if len(leads_df) > 0 else 0
+# Garantir coluna Modalidade se vier de versão antiga
+if "Modalidade" not in leads_df.columns:
+    leads_df["Modalidade"] = ""
 
+confirmados_df = leads_df[leads_df["Status"] == "Pago"]
+
+qtd_teorico = len(confirmados_df[confirmados_df["Modalidade"] == "Teórico"])
+qtd_pratica = len(confirmados_df[confirmados_df["Modalidade"] == "Prática"])
+
+total_confirmados = len(confirmados_df)
+vagas_restantes = META_VAGAS - total_confirmados
+
+# Receita
+receita_teorico = qtd_teorico * VALOR_TEORICO
+receita_pratica = qtd_pratica * VALOR_PRATICA
+receita_total = receita_teorico + receita_pratica
+receita_potencial_max = META_VAGAS * VALOR_PRATICA
+
+# Datas
 dias_online = (DATA_ONLINE_INICIO - date.today()).days
 dias_pratica = (DATA_PRATICA_INICIO - date.today()).days
 
-ocupacao = confirmados / META_VAGAS if META_VAGAS > 0 else 0
-
-# Receita
-receita_confirmada = confirmados * VALOR_CURSO
-receita_potencial = META_VAGAS * VALOR_CURSO
+ocupacao = total_confirmados / META_VAGAS if META_VAGAS > 0 else 0
 
 col1, col2, col3 = st.columns(3)
-col1.metric("🎯 Meta de Vagas", META_VAGAS)
-col2.metric("✅ Confirmados", confirmados)
+col1.metric("🎯 Meta de Alunos", META_VAGAS)
+col2.metric("✅ Confirmados", total_confirmados)
 col3.metric("🪑 Restantes", vagas_restantes)
 
 st.progress(ocupacao)
 
-col4, col5, col6 = st.columns(3)
+col4, col5 = st.columns(2)
 col4.metric("💻 Online inicia em", dias_online)
 col5.metric("🏥 Prática inicia em", dias_pratica)
-col6.metric("📈 Taxa de Conversão (%)", f"{taxa_conversao:.1f}")
+
+st.divider()
+
+# ================= MODALIDADES =================
+st.subheader("📘 Distribuição de Alunos")
+
+col6, col7 = st.columns(2)
+col6.metric("Teórico (97)", qtd_teorico)
+col7.metric("Prática (397)", qtd_pratica)
 
 st.divider()
 
 # ================= FINANCEIRO =================
 st.subheader("💰 Financeiro")
 
-col7, col8 = st.columns(2)
-col7.metric("💵 Receita Confirmada", f"R$ {receita_confirmada:,.2f}")
-col8.metric("📊 Receita Potencial", f"R$ {receita_potencial:,.2f}")
+col8, col9 = st.columns(2)
+col8.metric("💵 Receita Total", f"R$ {receita_total:,.2f}")
+col9.metric("📈 Receita Potencial Máxima", f"R$ {receita_potencial_max:,.2f}")
 
 st.divider()
 
@@ -96,6 +117,7 @@ with st.form("form_lead"):
     telefone = st.text_input("Telefone")
     origem = st.selectbox("Origem", ["Story", "Reels", "Indicação", "Outro"])
     status = st.selectbox("Status", ["Novo", "Informações enviadas", "Aguardando resposta", "Confirmado", "Pago"])
+    modalidade = st.selectbox("Modalidade", ["Teórico", "Prática"])
 
     enviar = st.form_submit_button("Salvar")
 
@@ -105,6 +127,7 @@ with st.form("form_lead"):
             "Telefone": telefone,
             "Origem": origem,
             "Status": status,
+            "Modalidade": modalidade,
             "Data": datetime.now().strftime("%d/%m/%Y")
         }
 
@@ -115,19 +138,10 @@ with st.form("form_lead"):
 
 st.divider()
 
-# ================= LEADS =================
+# ================= LISTA =================
 st.subheader("📋 Leads cadastrados")
 
 if not leads_df.empty:
-    leads_df["Data"] = pd.to_datetime(leads_df["Data"], format="%d/%m/%Y", errors="coerce")
-    leads_df["Dias sem contato"] = (pd.to_datetime(date.today()) - leads_df["Data"]).dt.days
-
-    leads_parados = leads_df[leads_df["Dias sem contato"] >= 2]
-
-    if not leads_parados.empty:
-        st.warning("⚠️ Existem leads parados há 2 dias ou mais!")
-        st.dataframe(leads_parados, use_container_width=True)
-
     st.dataframe(leads_df, use_container_width=True)
 else:
     st.info("Nenhum lead cadastrado ainda.")
